@@ -1,10 +1,13 @@
 const Crawler = require("crawler");
 const db = require("./db");
+console.log("db", db.course)
 const fs = require("fs");
 const path = require('path')
 
 
-db.defaults({ courseList: [] }).write(); //创建库
+
+db.log.defaults({ list: [] }).write(); //创建库
+db.course.defaults({ courseList: [] }).write(); //创建库
 
 // 爬取流程
 
@@ -14,7 +17,9 @@ var c = new Crawler({
     Connection: "keep-alive",
     Pragma: "no-cache",
     //签名
-    Authorization: '请填写签名'
+    Authorization:"xxx",
+    "User-Agent":
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.149 Safari/537.36"
   },
   // 在每个请求处理完毕后将调用此回调函数
   callback: function(error, res, done) {
@@ -36,9 +41,9 @@ function start() {
   crawlerSync({
     Host: "www.jiker.com",
     //下载所有，若新增课程，修改page和size即可
-    uri:"https://www.jiker.com/course?page=1&page_size=102&sort_type=time&difficulty_level=0&category_id&category_level",
+    // uri:"https://www.jiker.com/course?page=1&page_size=102&sort_type=time&difficulty_level=0&category_id&category_level",
     //下载2门课程，用来做测试，快
-    // uri:"https://www.jiker.com/course?page=&page_size=2&sort_type=time&difficulty_level",
+    uri:"https://www.jiker.com/course?page=&page_size=2&sort_type=time&difficulty_level",
     jQuery: true,
     headers: {
       "Content-Type": "text/html; charset=utf-8",
@@ -53,7 +58,7 @@ function start() {
       $(".course-list > a").each(function(index, item) {
         console.log("item", item);
         //获取所有视频详情页链接
-        db.get("courseList")
+        db.course.get("courseList")
           .push({
             detailLink: item.attribs.href
           })
@@ -71,7 +76,7 @@ function start() {
 //获取详情页信息-章节信息
 function getDetail() {
   console.log("正在获取详情页信息");
-  var courseList = db.get("courseList").value();
+  var courseList = db.course.get("courseList").value();
   (async () => {
     for (let i = 0; i < courseList.length; i++) {
       console.log(courseList[i]);
@@ -83,7 +88,7 @@ function getDetail() {
         let detail = JSON.parse(res.body);
         courseList[i].title = detail.data.course.name; //存储课程名称
         courseList[i].content = detail.data.course.content; //存储课程章节等信息
-        db.get("courseList").write();
+        db.course.get("courseList").write();
       } catch (error) {
         console.log("getDetail -> error", error);
       }
@@ -125,14 +130,25 @@ function downVideos(courseList, directory) {
                 Host: "q1.youked.jiker.com"
               }
             });
-            let fileName = (children[i].name+'.mp4').replace('/','\\');//防止课程名称包含反斜杆
+            let fileName = (children[i].name+'.mp4').replace(/\//g,'\\');//防止课程名称包含反斜杆
             // 文件流存为mp4视频
             saveFile(path.join(directory,fileName) , videoData.body)
               .then(res => {
+                db.log.get("list").push(
+                {
+                  name: children[i].name,
+                  status: true
+                }).write();
                 console.log("视频下载完毕---》", children[i].name);
                 reject(true);
               })
               .catch(err => {
+                db.log.get("list").push(
+                  {
+                    name: children[i].name,
+                    status: false,
+                    error: err
+                  }).write();
                 console.log("视频下载失败", err);
               });
           });
