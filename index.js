@@ -13,7 +13,7 @@ var c = new Crawler({
     Connection: "keep-alive",
     Pragma: "no-cache",
     //签名
-    Authorization:"Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpYXQiOjE1ODU5NzIxNjksImlzcyI6Imh0dHBzOlwvXC9wYXNzcG9ydC5qaWtlci5jb20iLCJleHAiOjE1ODY0MDQxNjksImF1ZCI6Imh0dHBzOlwvXC9qaWtlci5jb20iLCJzdWIiOjE2MTU3NSwiaW5mbyI6eyJpZCI6MTYxNTc1LCJuYW1lIjoiamlrZXI0NDMyODQyIiwiY291bnRyeV9jb2RlIjoiODYiLCJwaG9uZV9udW1iZXIiOiIxNTIxMDQwMzMwNiIsImludml0ZV91c2VyX2lkIjowfX0.iS1QOE9PJjdx8KfH_wgyshyZsfg7auFGR4vyesSZXLg",
+    Authorization:"xxx",
     "User-Agent":
       "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.149 Safari/537.36"
   },
@@ -148,7 +148,7 @@ function videoDown(item,directory,index){
       }
     });
     let sep = path.sep;
-    let fileName = (`第${index}节-${item.name}.mp4`).replace(new RegExp(sep,'g'),'-');//防止课程名称包含反斜杆
+    let fileName = (`第${index}节-${item.name}.mp4`).replace(/\/|\\/,'-');//防止课程名称包含反斜杆
     // 文件流存为mp4视频
     saveFile(path.join(directory,fileName) , videoData.body)
       .then(res => {
