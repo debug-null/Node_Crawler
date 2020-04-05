@@ -1,6 +1,7 @@
 # 使用方法
 * npm i
 * npm start
+* npm run restart  //错误重试处理
 > 注意： 抓取前要将你账户的签名粘贴至index.js文件中，可通过浏览器获取签名 Authorization
 > 由于我是VIP，只测试了VIP账户，普通账户应该需要做其他处理。
 

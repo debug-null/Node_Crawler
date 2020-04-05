@@ -1,13 +1,9 @@
 const Crawler = require("crawler");
 const db = require("./db");
-console.log("db", db.course)
 const fs = require("fs");
 const path = require('path')
-
-
-
-db.log.defaults({ list: [] }).write(); //创建库
-db.course.defaults({ courseList: [] }).write(); //创建库
+db.log.set('list', []).defaults({ list: [] }).write(); //创建库
+db.course.set('courseList', []).defaults({ courseList: [] }).write(); //创建库
 
 // 爬取流程
 
@@ -17,7 +13,7 @@ var c = new Crawler({
     Connection: "keep-alive",
     Pragma: "no-cache",
     //签名
-    Authorization:"xxx",
+    Authorization:"Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpYXQiOjE1ODU5NzIxNjksImlzcyI6Imh0dHBzOlwvXC9wYXNzcG9ydC5qaWtlci5jb20iLCJleHAiOjE1ODY0MDQxNjksImF1ZCI6Imh0dHBzOlwvXC9qaWtlci5jb20iLCJzdWIiOjE2MTU3NSwiaW5mbyI6eyJpZCI6MTYxNTc1LCJuYW1lIjoiamlrZXI0NDMyODQyIiwiY291bnRyeV9jb2RlIjoiODYiLCJwaG9uZV9udW1iZXIiOiIxNTIxMDQwMzMwNiIsImludml0ZV91c2VyX2lkIjowfX0.iS1QOE9PJjdx8KfH_wgyshyZsfg7auFGR4vyesSZXLg",
     "User-Agent":
       "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.149 Safari/537.36"
   },
@@ -43,7 +39,7 @@ function start() {
     //下载所有，若新增课程，修改page和size即可
     // uri:"https://www.jiker.com/course?page=1&page_size=102&sort_type=time&difficulty_level=0&category_id&category_level",
     //下载2门课程，用来做测试，快
-    uri:"https://www.jiker.com/course?page=&page_size=2&sort_type=time&difficulty_level",
+    uri:"https://www.jiker.com/course?page=&page_size=1&sort_type=time&difficulty_level",
     jQuery: true,
     headers: {
       "Content-Type": "text/html; charset=utf-8",
@@ -56,7 +52,7 @@ function start() {
     .then(res => {
       var $ = res.$;
       $(".course-list > a").each(function(index, item) {
-        console.log("item", item);
+        // console.log("item", item);
         //获取所有视频详情页链接
         db.course.get("courseList")
           .push({
@@ -90,7 +86,8 @@ function getDetail() {
         courseList[i].content = detail.data.course.content; //存储课程章节等信息
         db.course.get("courseList").write();
       } catch (error) {
-        console.log("getDetail -> error", error);
+        console.log("getDetail -> error--》解析错误，应该是未授权", res.body, error);
+        process.exit() 
       }
     }
     console.log("详情页信息获取完毕，准备进入下载阶段");
@@ -98,67 +95,87 @@ function getDetail() {
   })();
 }
 
-
+// 快速调试
+// var courseList = db.course.get("courseList").value();
+// downVideos(courseList);
 
 //视频下载
-function downVideos(courseList, directory) {
+async function downVideos(courseList, directory) {
   for (let i = 0; i < courseList.length; i++) {
     if (!courseList[i].children) {
       if (!fs.existsSync("./video")) {
         fs.mkdirSync("./video");
       }
       //根节点，创建目录
-      let rootDirectory = "./video/" + courseList[i].title;
+      var rootDirectory = "./video/" + courseList[i].title;
       if (!fs.existsSync(rootDirectory)) {
         fs.mkdirSync(rootDirectory);
       }
+      // 递归
       downVideos(courseList[i].content, rootDirectory);
     }
-
+  
     let children = courseList[i].children;
     if (children && children.length > 0) {
-      (async () => {
-        for (let i = 0; i < children.length; i++) {
-          console.log("开始下载视频---》", children[i].name);
-          await new Promise(async (reject, resolve) => {
-            var videoData = await crawlerSync({
-              encoding: null,
-              jQuery: false,
-              url: children[i].url,
-              filename: children[i].name, //写入文件名
-              headers: {
-                Host: "q1.youked.jiker.com"
-              }
-            });
-            let fileName = (children[i].name+'.mp4').replace(/\//g,'\\');//防止课程名称包含反斜杆
-            // 文件流存为mp4视频
-            saveFile(path.join(directory,fileName) , videoData.body)
-              .then(res => {
-                db.log.get("list").push(
-                {
-                  name: children[i].name,
-                  status: true
-                }).write();
-                console.log("视频下载完毕---》", children[i].name);
-                reject(true);
-              })
-              .catch(err => {
-                db.log.get("list").push(
-                  {
-                    name: children[i].name,
-                    status: false,
-                    error: err
-                  }).write();
-                console.log("视频下载失败", err);
-              });
-          });
-        }
-      })();
+      //创建章节目录
+      let chapterDirectory =`${directory}/第${i+1}章${courseList[i].name}`;
+      console.log("创建章节目录--》", chapterDirectory)
+      if(!fs.existsSync(chapterDirectory)){
+        fs.mkdirSync(chapterDirectory);
+      }
+      
+      let courseNode = 0;
+      for(let item of children){
+        courseNode++;
+        await videoDown(item, chapterDirectory, courseNode)
+      }
     }
   }
 }
 
 
+//视频下载
+function videoDown(item,directory,index){
+  return new Promise(async (reject, resolve) => {
+    console.log(`${index}-正在下载视频---》`, item.name);
+    var videoData = await crawlerSync({
+      encoding: null,
+      jQuery: false,
+      url: item.url,
+      filename: item.name, //写入文件名
+      headers: {
+        Host: "q1.youked.jiker.com"
+      }
+    });
+    let sep = path.sep;
+    let fileName = (`第${index}节-${item.name}.mp4`).replace(new RegExp(sep,'g'),'-');//防止课程名称包含反斜杆
+    // 文件流存为mp4视频
+    saveFile(path.join(directory,fileName) , videoData.body)
+      .then(res => {
+        db.log.get("list").push(
+        {
+          name: item.name,
+          status: true,
+          url: item.url,
+          path: directory
+        }).write();
+        console.log(`${index}-视频下载完毕---》`, item.name);
+        reject(true);
+      })
+      .catch(err => {
+        db.log.get("list").push(
+          {
+            name: item.name,
+            status: false,
+            error: err,
+            url: item.url,
+            item,
+            path: directory
+          }).write();
+        console.log("视频下载失败", err);
+      });
+  });
+}
 
 /**分片下载
  * [saveFileWithStream description]
